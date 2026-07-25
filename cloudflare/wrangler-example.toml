@@ -1,0 +1,57 @@
+# wrangler.toml — Example configuration for rss.chat on Cloudflare
+# Copy this file to wrangler.toml and replace the placeholder values with your own.
+# Keep your wrangler.toml out of version control — it contains your database IDs and secrets.
+
+name = "rsschat"
+main = "src/index.js"
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rsschat-db"
+database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "rsschat-media"
+
+[[send_email]]
+binding = "EMAIL"
+name = "default_email"
+destination_address = "replace-me@example.com"
+
+[[durable_objects.bindings]]
+name = "RSSCHAT_DO"
+class_name = "RssChatDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RssChatDO"]
+
+[vars]
+PRODUCT_NAME = "rssChat"
+MY_DOMAIN = "myserver.chat"
+URL_SERVER_FOR_CLIENT = "https://myserver.chat/"
+URL_SERVER_FOR_EMAIL = "https://myserver.chat/"
+URL_SERVER_HOME_PAGE_SOURCE = "https://code.scripting.com/rsschat/index.html"
+MAX_FEED_ITEMS = "100"
+MAX_RECENT_ITEMS = "100"
+MAX_MEDIA_UPLOAD_BYTES = "2097152"
+RSS_LANGUAGE = "en-us"
+RSS_DOCS = "http://cyber.law.harvard.edu/rss/rss.html"
+RSS_MAX_FEED_ITEMS = "100"
+FL_RSS_CLOUD_ENABLED = "true"
+RSS_CLOUD_DOMAIN = "rpc.rsscloud.io"
+RSS_CLOUD_PORT = "5337"
+RSS_CLOUD_PATH = "/pleaseNotify"
+RSS_CLOUD_REGISTER_PROCEDURE = ""
+RSS_CLOUD_PROTOCOL = "http-post"
+FL_REMOVE_BLANKS_AT_END = "true"
+ROBOTS_TEXT = "User-agent: *\nDisallow: /getitembyguid\nDisallow: /getiteminfo\n"
+URL_FAVICON = "https://myserver.chat/favicon.ico"
+URL_FEEDLAND_SERVER = "https://feedland.social/"
+URL_FEEDLAND_REDIRECT = "https://feedland.social/?item="
+MAIL_SENDER = "admin@myserver.chat"
+CONFIRM_EMAIL_SUBJECT = "myserver.chat confirmation"
+OPERATION_TO_CONFIRM = "sign in to myserver.chat"
