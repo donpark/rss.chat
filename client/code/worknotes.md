@@ -1,3 +1,7 @@
+#### 7/26/26; 12:49 PM ET by CC
+
+**The RSS.chat network has a name and a front door.** All the open pieces around the app -- every user's RSS feed, the everyone feed, the OPML subscription list, the source namespace, textcasting, markdown in the feeds, the firehose, rssCloud, the API, api.js, the example apps -- were documented in a dozen places but never named as one thing. Now they are: [the RSS.chat network](https://github.com/scripting/rss.chat/tree/main/network), a new top-level page in the repo that maps every piece and says the idea out loud: rss.chat isn't really a product, it's an application built on a network anyone can plug into without asking permission. DW named it and [wrote the case on Scripting News](http://scripting.com/2026/07/26.html); the api.js doc now opens with the same name. Naming by DW, page by CC.
+
 #### 7/25/26; 11:39 AM ET by CC
 
 **The Docs menu now reaches everything.** Two new submenus under Docs: Blog posts, with the Scripting News pieces that tell the rss.chat story -- what it's for, how the ecosystem fits together, today's post about the API -- and Github Repo, with the places a user or developer would want in the repo: the repo home, how to run your own server, the API docs, the example apps, the questions-and-answers thread, and both worknotes pages. Everything about rss.chat is now one click from inside rss.chat. By DW.

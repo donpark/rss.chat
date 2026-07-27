@@ -2,7 +2,7 @@
 	"name": "rssnetwork",
 	"description": "A simple chat network based on RSS 2.0 feeds and websockets.",
 	"author": "Dave Winer <dave@scripting.com>",
-	"version": "0.6.5",
+	"version": "0.6.6",
 	"main": "rssnetwork.js",
 	"files": [
 		"worknotes.md",
@@ -14,6 +14,7 @@
 		},
 	"dependencies" : {
 		"turndown": "7.2.2",
+		"pagedown": "1.1.0",
 		"autolinker": "4.1.5",
 		"sanitize-html": "2.17.1",
 		"better-sqlite3": "11.10.0",

@@ -1,4 +1,4 @@
-var myVersion = "0.6.5", myProductName = "rss.network";
+var myVersion = "0.6.6", myProductName = "rss.network";
 
 const daveappserver = require ("daveappserver");
 const rss = require ("daverss");
@@ -10,6 +10,7 @@ const path = require ("path");
 const request = require ("request");     
 const davesql = require ("davesql"); 
 const turndown = require ("turndown"); //5/3/26 by DW
+const pagedown = require ("pagedown"); //7/27/26 by CC -- #219
 const autolinker = require ("autolinker"); //7/13/26 by CC
 const sanitizeHtml = require ("sanitize-html"); //7/23/26 by CC
 
@@ -114,6 +115,10 @@ var config = {
 		const myTurndown = new turndown ();
 		const markdowntext = myTurndown.turndown (htmltext);
 		return (markdowntext);
+		}
+	function getHtmlFromMarkdown (markdowntext) { //7/27/26 by CC -- #219
+		const myConverter = new pagedown.Converter ();
+		return (myConverter.makeHtml (markdowntext));
 		}
 	function notifySocketSubscribers (verb, payload, callbackToQualify) { //6/21/26 by CC -- broadcast inline to our own socket clients; modeled on feedland.js
 		if (config.flWebsocketEnabled) {
@@ -1440,32 +1445,44 @@ var config = {
 							callback ({message});
 							}
 						else {
-							const theNewItem = {
-								title: postRec.title,
-								description: sanitizeHtmltext (linkifyUrls (trimTrailingBlankLines (postRec.description))), //7/13/26 by CC -- #175; 7/20/26 -- #192; 7/23/26 -- XSS
-								markdowntext: trimTrailingBlankLines (postRec.markdowntext), //6/3/26 by DW; 7/20/26 by CC -- #192
-								inReplyTo: postRec.inReplyTo,
-								feedUrl: getFeedUrl (userRec.screenname),
-								pubDate: new Date (),
-								author: userRec.screenname, //5/4/26 by DW
-								};
-							addItem (theNewItem, function (err, itemRec) {
-								if (err) {
-									callback (err);
+							if ((postRec.description === undefined) && (postRec.markdowntext === undefined)) { //7/27/26 by CC -- #219
+								const message = "Can't add the post because it has no text.";
+								callback ({message});
+								}
+							else {
+								if (postRec.description === undefined) {
+									postRec.description = getHtmlFromMarkdown (postRec.markdowntext);
 									}
-								else {
-									updateFeedsOnS3 (userRec, function (err, data) {
-										if (err) {
-											callback (err);
-											}
-										else {
-											itemRec.guid = getPermalinkUrl (itemRec); //6/20/26 by DW
-											callback (undefined, itemRec);
-											}
-										});
-									updateReplyFeedsOnS3 (itemRec.inReplyTo, userRec.screenname); //7/8/26 by CC
+								if (postRec.markdowntext === undefined) {
+									postRec.markdowntext = getMarkdownFromHtml (postRec.description);
 									}
-								});
+								const theNewItem = {
+									title: postRec.title,
+									description: sanitizeHtmltext (linkifyUrls (trimTrailingBlankLines (postRec.description))), //7/13/26 by CC -- #175; 7/20/26 -- #192; 7/23/26 -- XSS
+									markdowntext: trimTrailingBlankLines (postRec.markdowntext), //6/3/26 by DW; 7/20/26 by CC -- #192
+									inReplyTo: postRec.inReplyTo,
+									feedUrl: getFeedUrl (userRec.screenname),
+									pubDate: new Date (),
+									author: userRec.screenname, //5/4/26 by DW
+									};
+								addItem (theNewItem, function (err, itemRec) {
+									if (err) {
+										callback (err);
+										}
+									else {
+										updateFeedsOnS3 (userRec, function (err, data) {
+											if (err) {
+												callback (err);
+												}
+											else {
+												itemRec.guid = getPermalinkUrl (itemRec); //6/20/26 by DW
+												callback (undefined, itemRec);
+												}
+											});
+										updateReplyFeedsOnS3 (itemRec.inReplyTo, userRec.screenname); //7/8/26 by CC
+										}
+									});
+								}
 							}
 						}
 					}
@@ -1518,6 +1535,12 @@ var config = {
 											callback ({message});
 											}
 										else {
+											if ((postRec.markdowntext !== undefined) && (postRec.description === undefined)) { //7/27/26 by CC -- #219
+												postRec.description = getHtmlFromMarkdown (postRec.markdowntext);
+												}
+											if ((postRec.description !== undefined) && (postRec.markdowntext === undefined)) { //7/27/26 by CC -- #219
+												postRec.markdowntext = getMarkdownFromHtml (postRec.description);
+												}
 											postRec.description = sanitizeHtmltext (linkifyUrls (trimTrailingBlankLines (postRec.description))); //7/13/26 by CC -- #175; 7/20/26 -- #192; 7/23/26 -- XSS
 											postRec.markdowntext = trimTrailingBlankLines (postRec.markdowntext); //7/20/26 by CC -- #192
 											updateItem (postRec, function (err, itemRec) {
