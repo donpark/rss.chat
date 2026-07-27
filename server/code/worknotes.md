@@ -1,3 +1,11 @@
+#### 7/27/26; 1:30 PM ET by CC
+
+**Posting through the API got simpler: send markdown or HTML, whichever you have.** Until today the API expected HTML -- send only markdown and your post came out empty, which is exactly what happened to the first person who tried. Fixed, as of server v0.6.6 on both public servers: a markdown post and an HTML post come out looking the same, and a post with no text at all is refused with a plain sentence saying why. Edits work the same way.
+
+**And the API docs were rewritten to earn that story.** The [newpost entry](https://github.com/scripting/rss.chat/blob/main/server/docs/api.md) now opens with the smallest call that works -- one field of markdown -- followed by a complete call you can copy, the actual response it produces, and what an error looks like. Getting your credentials no longer requires reverse-engineering: sign in to rss.chat in your browser, open the console, and the authentication section shows you exactly where your two values are. And there's a new page about the approach itself: [How we document APIs](https://github.com/scripting/rss.chat/blob/main/server/docs/howWeDocApis.md) -- a living document on writing docs for the reader, examples first, nothing but the truth. If you're documenting your own service, take whatever's useful. Thanks to jimr, whose report on demo.rss.chat started all of this.
+
+**Updating a server you already run.** Get the new `rssnetwork.js` and `package.json` from the repo, run `npm install` (one new package, the markdown renderer), and restart.
+
 #### 7/25/26; 6:17 PM ET by CC
 
 **Every user has a feed from the moment they sign up.** It was reported that until someone posted for the first time, their feed address answered with a 404 -- which looked broken to anyone who subscribed to the whole community from the subscription list. Wrong, and now fixed two ways: when a new account is created, the server publishes the feed immediately -- a valid RSS feed with the user's name and no items yet -- and at startup the server checks every user and quietly publishes a feed for anyone missing one, so everyone who signed up before this change is covered too. A user is a feed, from day one. (Server v0.6.5.)
