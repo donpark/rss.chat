@@ -1,4 +1,4 @@
-var myVersion = "0.6.6", myProductName = "rss.network";
+var myVersion = "0.6.7", myProductName = "rss.network";
 
 const daveappserver = require ("daveappserver");
 const rss = require ("daverss");
@@ -1428,6 +1428,9 @@ var config = {
 				const message = "Can't add the post because the postRec doesn't parse properly.";
 				callback ({message});
 				return;
+				}
+			if (postRec.inReplyTo === undefined) { //7/27/26 by CC -- also accept inReplyToNum, the name replies carry when read
+				postRec.inReplyTo = postRec.inReplyToNum;
 				}
 			getUserInfoByEmail (email, function (err, userRec) {
 				if (err) {
