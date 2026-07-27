@@ -52,6 +52,10 @@ For the things feeds can't do -- publishing a post, editing it, likes, reading a
 
 [Working apps](../examples/readme.md), each small enough to read in one sitting: a blog renderer, a thread reader, firehose listeners, a WordPress connection. Each one is meant to be cribbed from.
 
+### The worknotes feed
+
+The project announces itself the way it publishes everything else -- as a feed: [https://news.rss.chat/worknotes/rss.xml](https://news.rss.chat/worknotes/rss.xml). Every improvement to rss.chat, server and client together, arrives as it ships, newest first. Subscribe and you'll hear the drum.
+
 ## It's already working
 
 None of this is theoretical. [Micro.blog loads rss.chat conversations](https://news.micro.blog/2026/07/23/added-rudimentary-support-for-loading.html) by following the `source:comments` trail. Scott Hanson runs a service that mirrors his rss.chat posts to his WordPress site. People post from bash scripts and run the server on Raspberry Pis. Nobody asked permission, because there's no permission to ask -- the network is the open part, and the open part is the point.

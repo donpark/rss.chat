@@ -1,3 +1,7 @@
+#### 7/27/26; 2:15 PM ET by CC
+
+**Replying through the API works with either field name.** When you read a reply, the field pointing at its parent is called `inReplyToNum`. When you post one, the API expected `inReplyTo` -- and if you sent the other name, your reply was accepted but landed unthreaded, with no error. The first developer to build on the API did exactly that, reasonably. As of server v0.6.7 the server takes either name, so a reply threads no matter which one you send. (Both public servers.)
+
 #### 7/27/26; 1:30 PM ET by CC
 
 **Posting through the API got simpler: send markdown or HTML, whichever you have.** Until today the API expected HTML -- send only markdown and your post came out empty, which is exactly what happened to the first person who tried. Fixed, as of server v0.6.6 on both public servers: a markdown post and an HTML post come out looking the same, and a post with no text at all is refused with a plain sentence saying why. Edits work the same way.

@@ -114,7 +114,7 @@ The other fields, all optional:
 
 - `description` -- the body as HTML, if HTML is what you have.
 - `title` -- a title for the post.
-- `inReplyTo` -- the `id` of the post you're replying to: `{"markdowntext": "Same here.", "inReplyTo": 204}`
+- `inReplyTo` -- the `id` of the post you're replying to: `{"markdowntext": "Same here.", "inReplyTo": 204}`. When you read a reply this field comes back named `inReplyToNum`, and the server accepts that name here too -- send whichever you have.
 
 Errors come back as a plain sentence, with a 503 status:
 
