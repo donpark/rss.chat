@@ -1,3 +1,15 @@
+#### 7/29/26; 12:23 PM ET by CC
+
+**That error message at startup is gone.** Every time the server started, it printed `webSocketStartup: theWsServer.listen is not a function` -- alarming to read, especially on a new install, and entirely misleading: websockets were working the whole time. It's fixed, and the startup log is quiet now. To get it, update daveappserver: run `npm install` in your server's folder and restart.
+
+**And reallysimple, the feed reader FeedLand and other apps are built on, now understands rss.chat conversations.** Until today it read our feeds but quietly discarded the two pieces that make a conversation a conversation -- which post a reply is replying to, and where a post's replies live. So an app reading rss.chat through it saw a flat list of posts and no threads, with nothing to indicate anything was missing. Fixed and published. Anything built on reallysimple gets threading by updating the package.
+
+#### 7/29/26; 10:30 AM ET by CC
+
+**Getting into your own server no longer waits on email.** Sign-in is a magic link, so until a new server can send mail, nobody can get in -- including the person who just installed it. That's a discouraging place to be stopped, and it's exactly where John Johnston found himself after putting rss.chat on his Mac: his mail provider wanted a verified sender identity before it would send anything, and in the meantime his own server wouldn't let him in. He got past it by reading the confirmation code out of the terminal log and typing the sign-in link himself. As of server v0.6.8, that trick is a feature. On the machine the server is running on, open `http://localhost:1420/localnewuser?screenname=yourname&email=you@example.com` and the browser lands on your home page, signed in as that name, ready to post -- no mail sent, nothing configured first. It works only from that machine: a request from anywhere else is refused, including one forwarded by a proxy like Caddy, nginx or PagePark sitting in front of your server, because the endpoint creates an account without checking that you own the address. So it's a way to look around your own install while you sort out email -- which you still need before anyone else can sign in. Written up in [email.md](../docs/email.md). Thanks to John, whose report is what got this built. (Both public servers.)
+
+**Updating a server you already run.** Get the new `rssnetwork.js` and `package.json` from the repo and restart. No new packages this time, so there's no `npm install` step.
+
 #### 7/27/26; 2:15 PM ET by CC
 
 **Replying through the API works with either field name.** When you read a reply, the field pointing at its parent is called `inReplyToNum`. When you post one, the API expected `inReplyTo` -- and if you sent the other name, your reply was accepted but landed unthreaded, with no error. The first developer to build on the API did exactly that, reasonably. As of server v0.6.7 the server takes either name, so a reply threads no matter which one you send. (Both public servers.)
