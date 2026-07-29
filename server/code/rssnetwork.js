@@ -1,4 +1,4 @@
-var myVersion = "0.6.7", myProductName = "rss.network";
+var myVersion = "0.6.8", myProductName = "rss.network";
 
 const daveappserver = require ("daveappserver");
 const rss = require ("daverss");
@@ -250,6 +250,16 @@ var config = {
 			}
 		else {
 			return (sanitizeHtml (htmltext, config.legalTags));
+			}
+		}
+	function requestIsFromThisMachine (theRequest) { //7/29/26 by CC -- #205
+		const flThroughProxy = (theRequest.sysRequest.headers ["x-forwarded-for"] !== undefined); //behind a proxy the socket address is the proxy's, not the user's
+		if (flThroughProxy) {
+			return (false);
+			}
+		else {
+			const theAddress = theRequest.sysRequest.connection.remoteAddress; //the far end of the connection, not anything the caller can set
+			return ((theAddress === "127.0.0.1") || (theAddress === "::1") || (theAddress === "::ffff:127.0.0.1")); //loopback, in its three spellings
 			}
 		}
 	
@@ -1867,6 +1877,30 @@ var config = {
 				}
 			});
 		}
+	function localNewUser (screenname, email, callback) { //7/29/26 by CC -- #205, sign in on a local install before mail works
+		//thanks to John Johnston, who hit this on his Mac and worked around it by hand -- rss.chat post 381
+		if (screenname === undefined) {
+			const message = "Can't create the user because no screenname was specified.";
+			callback ({message});
+			}
+		else {
+			if (email === undefined) {
+				const message = "Can't create the user " + screenname + " because no email address was specified.";
+				callback ({message});
+				}
+			else {
+				addEmailToUserInDatabase (screenname, email, undefined, true, function (err, emailSecret) {
+					if (err) {
+						callback (err);
+						}
+					else {
+						const url = "/?emailconfirmed=true&email=" + encodeURIComponent (email) + "&code=" + encodeURIComponent (emailSecret) + "&screenname=" + encodeURIComponent (screenname);
+						callback (undefined, url);
+						}
+					});
+				}
+			}
+		}
 //like -- 6/24/26 by DW
 	function addToLikesTable (screenname, itemId, callback) {
 		const likesRec = {
@@ -2346,6 +2380,22 @@ function handleHttpRequest (theRequest) {
 			return (true);
 		case "/uploadmedia": //7/22/26 by CC -- #188
 			uploadMedia (params.emailaddress, params.emailcode, params.type, theRequest.postBody, httpReturn);
+			return (true);
+		case "/localnewuser": //7/29/26 by CC -- #205
+			if (requestIsFromThisMachine (theRequest)) {
+				localNewUser (params.screenname, params.email, function (err, url) {
+					if (err) {
+						returnError (err);
+						}
+					else {
+						returnRedirect (url);
+						}
+					});
+				}
+			else {
+				const message = "Can't create the user because localnewuser only works from the machine the server is running on.";
+				returnError ({message});
+				}
 			return (true);
 		
 		default: //7/17/26 by DW
