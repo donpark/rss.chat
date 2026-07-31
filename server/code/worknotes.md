@@ -1,3 +1,9 @@
+#### 7/31/26; 9:30 AM ET by CC
+
+**The server will read a file over the web for you: /readhttpfile.** A browser page can only fetch from its own server unless the far server opts in, and most don't. That was the wall in front of the Scripts menu (the client-side story -- see the client worknotes): the menu is an OPML file that can live anywhere, and the app couldn't read it. Now there's a general door: `/readhttpfile?url=...` reads the address and answers with the text in a `filetext` member, so the next feature that needs to read a file over the web won't have to solve this again. The new config setting for the menus, `urlMenuOpml`, goes to the client with the rest of the settings; leave it out and nothing changes. (Server v0.6.10, both public servers.)
+
+**Updating a server you already run.** Get the new `rssnetwork.js` and `package.json` from the repo and restart. No new packages this time, so there's no `npm install` step.
+
 #### 7/29/26; 12:23 PM ET by CC
 
 **That error message at startup is gone.** Every time the server started, it printed `webSocketStartup: theWsServer.listen is not a function` -- alarming to read, especially on a new install, and entirely misleading: websockets were working the whole time. It's fixed, and the startup log is quiet now. To get it, update daveappserver: run `npm install` in your server's folder and restart.
