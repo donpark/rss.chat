@@ -1,4 +1,4 @@
-var myVersion = "0.6.8", myProductName = "rss.network";
+var myVersion = "0.6.10", myProductName = "rss.network";
 
 const daveappserver = require ("daveappserver");
 const rss = require ("daverss");
@@ -57,12 +57,9 @@ var config = {
 	robotsText: "User-agent: *\nDisallow: /getitembyguid\nDisallow: /getiteminfo\nDisallow: /getthread\n", //7/1/26 by DW; getthread added 7/24/26 by CC
 	
 	urlFavicon: "//s3.amazonaws.com/scripting.com/favicon.ico", //7/14/26 by DW
-	
 	flFeedsInDatabase: false, //7/15/26 by DW
 	flRemoveBlanksAtEnd: true, //7/20/26 by DW
 	titleForSublist: undefined, //7/20/26 by DW
-	flNightlyBackup: false, //7/25/26 by CC -- #207
-	backupFolder: "data/backups/", //7/25/26 by CC -- #207
 	legalTags: { //7/23/26 by DW
 		allowedTags: ["p", "br", "a", "b", "i", "strong", "em", "img", "blockquote", "ul", "ol", "li", "h3"],
 		allowedAttributes: {
@@ -70,6 +67,9 @@ var config = {
 			img: ["src", "alt"]
 			}
 		},
+	flNightlyBackup: false, //7/25/26 by CC -- #207
+	backupFolder: "data/backups/", //7/25/26 by CC -- #207
+	urlMenuOpml: "", //7/30/26 by DW
 	};
 
 //misc stuff
@@ -261,6 +261,21 @@ var config = {
 			const theAddress = theRequest.sysRequest.connection.remoteAddress; //the far end of the connection, not anything the caller can set
 			return ((theAddress === "127.0.0.1") || (theAddress === "::1") || (theAddress === "::ffff:127.0.0.1")); //loopback, in its three spellings
 			}
+		}
+	function httpRequest (url, timeout, headers, callback) { //7/30/26 by DW
+		request (url, function (err, response, data) { 
+			if (err) {
+				callback (err);
+				}
+			else {
+				if (response.statusCode != 200) {
+					callback ({message: "Error: " + data.toString ()});
+					}
+				else {
+					callback (undefined, data.toString ());
+					}
+				}
+			});
 		}
 	
 //sql code
@@ -2250,6 +2265,14 @@ function handleHttpRequest (theRequest) {
 			returnData (data);
 			}
 		}
+	function httpReturnText (err, theText) { //7/30/26 by DW
+		if (err) {
+			returnError (err);
+			}
+		else {
+			returnText (theText);
+			}
+		}
 	function returnRedirect (url, code=undefined) {
 		var headers = {
 			location: url
@@ -2264,7 +2287,8 @@ function handleHttpRequest (theRequest) {
 	switch (theRequest.lowerpath) {
 		case "/": //7/17/26 by DW
 			theRequest.addToPagetable = {
-				feedUrlEveryone: config.rssFeedUrl + config.rssFilename
+				feedUrlEveryone: config.rssFeedUrl + config.rssFilename,
+				urlMenuOpml: config.urlMenuOpml, //7/30/26 by DW
 				};
 			return (false); //don't consume, pass it through daveappserver
 		case "/feed":
@@ -2396,6 +2420,17 @@ function handleHttpRequest (theRequest) {
 				const message = "Can't create the user because localnewuser only works from the machine the server is running on.";
 				returnError ({message});
 				}
+			return (true);
+		
+		case "/readhttpfile": //7/30/26 by DW
+			httpRequest (params.url, undefined, undefined, function (err, filetext) {
+				if (err) {
+					returnError (err);
+					}
+				else {
+					returnData ({filetext});
+					}
+				});
 			return (true);
 		
 		default: //7/17/26 by DW
