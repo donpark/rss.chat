@@ -1,4 +1,4 @@
-var myVersion = "0.6.10", myProductName = "rss.network";
+var myVersion = "0.6.11", myProductName = "rss.network";
 
 const daveappserver = require ("daveappserver");
 const rss = require ("daverss");
@@ -1916,6 +1916,22 @@ var config = {
 				}
 			}
 		}
+	function handleReadHttpFile (url, callback) { //8/1/26 by DW
+		if (url == config.urlMenuOpml) {
+			httpRequest (url, undefined, undefined, function (err, filetext) {
+				if (err) {
+					callback (err);
+					}
+				else {
+					callback (undefined, {filetext});
+					}
+				});
+			}
+		else {
+			const message = "Can't read the file because it is not authorized.";
+			callback ({message});
+			}
+		}
 //like -- 6/24/26 by DW
 	function addToLikesTable (screenname, itemId, callback) {
 		const likesRec = {
@@ -2423,14 +2439,7 @@ function handleHttpRequest (theRequest) {
 			return (true);
 		
 		case "/readhttpfile": //7/30/26 by DW
-			httpRequest (params.url, undefined, undefined, function (err, filetext) {
-				if (err) {
-					returnError (err);
-					}
-				else {
-					returnData ({filetext});
-					}
-				});
+			handleReadHttpFile (params.url, httpReturn); //8/1/26 by DW
 			return (true);
 		
 		default: //7/17/26 by DW
