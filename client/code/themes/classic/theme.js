@@ -83,6 +83,9 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 			var draftSaveTimeout, theSpinner; //assigned by draft/publish flow
 			var currentEditorMode = appPrefs.defaultEditorMode || "wizzy";
 			var ctPendingImageUploads = 0, idNextImageUpload = 1; //7/22/26 by CC -- #188: publishing waits while images upload
+			var pendingAudioAttachment, theRecorder, recorderChunks, recorderStartTime, recorderTimerInterval;
+			var flRecorderCanceled = false;
+			var theRecognition, transcriptFinalText = "", transcriptInterimText = "";
 
 			const divReplyOverlay = $('<div class="divReplyOverlay"></div>');
 			const divReplyModal = $('<div class="divReplyModal"></div>');
@@ -103,6 +106,14 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 			const buttonModalBulletList = $('<button class="buttonModalTool" title="Bulleted list"><i class="fas fa-list-ul"></i></button>');
 			const buttonModalNumberList = $('<button class="buttonModalTool" title="Numbered list"><i class="fas fa-list-ol"></i></button>');
 			const buttonModalMarkdown = $('<button class="buttonModalTool" title="Toggle markdown mode"><i class="fab fa-markdown"></i></button>');
+			const buttonModalRecord = $('<button class="buttonModalTool" title="Record speech"><i class="fas fa-microphone-alt"></i></button>');
+			const divAudioChip = $('<div class="divAudioChip"><i class="fas fa-microphone-alt"></i><span></span><button title="Remove recording">×</button></div>');
+			const divAudioOverlay = $('<div class="divAudioOverlay"></div>');
+			const divAudioDialog = $('<div class="divAudioDialog"></div>');
+			const divAudioTimer = $('<div class="divAudioTimer">0:00 / 4:00</div>');
+			const divAudioTranscript = $('<div class="divAudioTranscript"></div>');
+			const buttonAudioCancel = $('<button class="btn btn-default">Cancel</button>');
+			const buttonAudioStop = $('<button class="btn btn-primary">Stop</button>');
 			const divModalBottom = $('<div class="divModalBottom"></div>');
 			const divModalStatus = $('<div class="divModalStatus"></div>');
 			const divModalWhen = $('<div class="divModalWhen"></div>');
@@ -618,6 +629,125 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					}
 				}
 
+			function formatAudioDuration (seconds) {
+				seconds = Math.max (0, Math.round (seconds));
+				return (Math.floor (seconds / 60) + ":" + String (seconds % 60).padStart (2, "0"));
+				}
+			function refreshComposerPublishButton () {
+				const flHasContent = getEditorText ().trim ().length > 0 || pendingAudioAttachment !== undefined;
+				buttonReplyPost.prop ("disabled", !flHasContent || (ctPendingImageUploads > 0));
+				}
+			function clearPendingAudio () {
+				if (pendingAudioAttachment !== undefined) {
+					const id = pendingAudioAttachment.id;
+					pendingAudioAttachment = undefined;
+					globals.myRssNetwork.deleteMedia (id, function () {});
+					}
+				divAudioChip.hide ();
+				refreshComposerPublishButton ();
+				}
+			function getAudioPlayerElement (item) {
+				if (item.enclosureUrl === undefined || item.enclosureType === undefined || item.enclosureType.indexOf ("audio/") !== 0) {
+					return ($());
+					}
+				return ($('<audio controls preload="metadata" class="divAudioPlayer"></audio>').attr ("src", item.enclosureUrl));
+				}
+			function stopRecognition () {
+				if (theRecognition !== undefined) {
+					theRecognition.onend = null;
+					try { theRecognition.stop (); } catch (err) {}
+					theRecognition = undefined;
+					}
+				}
+			function finishRecording () {
+				if (theRecorder === undefined) {
+					return;
+					}
+				clearInterval (recorderTimerInterval);
+				theRecorder.stop ();
+				}
+			function appendTranscript () {
+				const text = (transcriptFinalText + " " + transcriptInterimText).trim ();
+				if (text.length === 0) return;
+				if (currentEditorMode === "markdown") {
+					textareaMarkdown.val (textareaMarkdown.val () + (textareaMarkdown.val ().length ? "\n\n" : "") + text).trigger ("input");
+					}
+				else {
+					inputReplyComposer.append ($("<p></p>").text (text)).trigger ("input");
+					}
+				}
+			function convertAndUploadAudio (blob, seconds) {
+				if (flRecorderCanceled) return;
+				try {
+					MediabunnyMp3Encoder.registerMp3Encoder ();
+					const input = new Mediabunny.Input ({source: new Mediabunny.BlobSource (blob), formats: Mediabunny.ALL_FORMATS});
+					const output = new Mediabunny.Output ({format: new Mediabunny.Mp3OutputFormat (), target: new Mediabunny.BufferTarget ()});
+					Mediabunny.Conversion.init ({input, output}).then (function (conversion) {
+						return conversion.execute ().then (function () {
+							if (flRecorderCanceled) return;
+							const reader = new FileReader ();
+							reader.onload = function () {
+								const base64 = reader.result.split (",", 2) [1];
+								globals.myRssNetwork.uploadMedia ("audio/mpeg", base64, function (err, data) {
+									if (err || flRecorderCanceled) {
+										if (data !== undefined) globals.myRssNetwork.deleteMedia (data.id, function () {});
+										if (err) alertDialog (err.message);
+										return;
+										}
+									if (pendingAudioAttachment !== undefined) globals.myRssNetwork.deleteMedia (pendingAudioAttachment.id, function () {});
+									pendingAudioAttachment = {url: data.url, id: data.id, type: data.type, size: data.size, seconds};
+									divAudioChip.find ("span").text (formatAudioDuration (seconds));
+									divAudioChip.show ();
+									refreshComposerPublishButton ();
+									});
+								};
+							reader.readAsDataURL (new Blob ([output.target.buffer], {type: "audio/mpeg"}));
+							});
+						});
+					}
+				catch (err) { alertDialog (err.message || String (err)); }
+				}
+			function startAudioRecording () {
+				if (editTargetItem !== undefined || !navigator.mediaDevices) return;
+				flRecorderCanceled = false;
+				transcriptFinalText = ""; transcriptInterimText = "";
+				divAudioTranscript.text ("Starting microphone…");
+				divAudioOverlay.show ();
+				navigator.mediaDevices.getUserMedia ({audio: true}).then (function (stream) {
+					if (flRecorderCanceled) { stream.getTracks ().forEach (function (track) { track.stop (); }); return; }
+					const types = ["audio/webm;codecs=opus", "audio/mp4"];
+					const mimeType = types.find (function (type) { return MediaRecorder.isTypeSupported (type); });
+					theRecorder = new MediaRecorder (stream, mimeType ? {mimeType} : undefined);
+					recorderChunks = []; recorderStartTime = Date.now ();
+					theRecorder.ondataavailable = function (event) { if (event.data.size > 0) recorderChunks.push (event.data); };
+					theRecorder.onstop = function () {
+						stream.getTracks ().forEach (function (track) { track.stop (); });
+						stopRecognition ();
+						const recordingType = theRecorder.mimeType || "audio/webm";
+						theRecorder = undefined;
+						const seconds = Math.min (240, (Date.now () - recorderStartTime) / 1000);
+						divAudioOverlay.hide ();
+						if (!flRecorderCanceled) {
+							appendTranscript ();
+							convertAndUploadAudio (new Blob (recorderChunks, {type: recordingType}), seconds);
+							}
+						};
+					theRecorder.start (250);
+					recorderTimerInterval = setInterval (function () {
+						const seconds = (Date.now () - recorderStartTime) / 1000;
+						divAudioTimer.text (formatAudioDuration (seconds) + " / 4:00");
+						if (seconds >= 240) finishRecording ();
+						}, 250);
+					const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+					if (Recognition) {
+						theRecognition = new Recognition (); theRecognition.continuous = true; theRecognition.interimResults = true;
+						theRecognition.onresult = function (event) { transcriptFinalText = ""; transcriptInterimText = ""; for (let i = 0; i < event.results.length; i++) { if (event.results [i].isFinal) transcriptFinalText += event.results [i] [0].transcript + " "; else transcriptInterimText += event.results [i] [0].transcript; } divAudioTranscript.text (transcriptFinalText + transcriptInterimText); };
+						theRecognition.onerror = function () {};
+						try { theRecognition.start (); } catch (err) {}
+						}
+					divAudioTranscript.text ("Listening…");
+					}).catch (function (err) { divAudioOverlay.hide (); alertDialog (err.message || "Microphone access was denied."); });
+				}
 			function openReplyModal (item) {
 				const author = item.author || "?";
 				const initial = author.charAt (0).toUpperCase ();
@@ -633,7 +763,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					flReplyParentHasTitle = true;
 					divReplyParentTitle.text (theParentTitle);
 					}
-				divReplyParentText.html (item.description);
+				divReplyParentText.empty ().append ($("<div></div>").html (item.description)).append (getAudioPlayerElement (item));
 				const myScreenname = globals.myRssNetwork.getScreenname () || "?";
 				const myInitial = myScreenname.charAt (0).toUpperCase ();
 				populateAvatar (divReplyComposerAvatar, appPrefs.myAvatarImageUrl || appConsts.urlDefaultImage, myInitial);
@@ -657,6 +787,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 				setReplyParentVisible (false); //title and text start folded every time
 				divReplyParentDivider.show ();
 				replyTargetItem = item;
+				buttonModalRecord.prop ("disabled", false);
 				lockBodyScroll ();
 				divReplyOverlay.fadeIn (300);
 				focusEditor ();
@@ -716,6 +847,12 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					}
 				}
 			function closeReplyModal (flDiscardDraft) {
+				if (flDiscardDraft !== true) flRecorderCanceled = true;
+				if (theRecorder !== undefined) {
+					flRecorderCanceled = true;
+					finishRecording ();
+					}
+				if (flDiscardDraft !== true) clearPendingAudio ();
 				if (flDiscardDraft === true) { //6/25/26 by CC -- #87: publishing discards the draft; dismissing the editor (Cancel, Escape, click-away) keeps your text so the Show editor command can bring it back
 					clearDraft ();
 					}
@@ -727,6 +864,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 				textareaMarkdown.val ("").removeClass ("flPublishing"); //7/5/26 by CC -- #107
 				mdSourceText = "";
 				replyTargetItem = undefined;
+				buttonModalRecord.prop ("disabled", false);
 				if (editTargetItem !== undefined) { //5/21/26 by Claude -- restore the new-post title snapshot
 					currentTitle = savedTitleBeforeEdit;
 					saveTitle ();
@@ -749,6 +887,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					return;
 					}
 				editTargetItem = item;
+				buttonModalRecord.prop ("disabled", true);
 				savedTitleBeforeEdit = currentTitle;
 				currentTitle = item.title;
 				refreshComposerTitle ();
@@ -803,7 +942,10 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 				const postRec = {
 					id: editTargetItem.id,
 					description: htmlText,
-					markdowntext: markdownText
+					markdowntext: markdownText,
+					enclosureUrl: editTargetItem.enclosureUrl,
+					enclosureType: editTargetItem.enclosureType,
+					enclosureLength: editTargetItem.enclosureLength
 					};
 				if (currentTitle !== undefined) {
 					postRec.title = currentTitle;
@@ -855,6 +997,11 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 				textareaMarkdown.addClass ("flPublishing"); //7/5/26 by CC -- #107
 				buttonReplyPost.prop ("disabled", true);
 				const postRec = {description: htmlText, markdowntext: markdownText, inReplyTo: parentId};
+				if (pendingAudioAttachment !== undefined) {
+					postRec.enclosureUrl = pendingAudioAttachment.url;
+					postRec.enclosureType = pendingAudioAttachment.type;
+					postRec.enclosureLength = pendingAudioAttachment.size;
+					}
 				if (currentTitle !== undefined) { //7/6/26 by CC -- #160: a reply carries its title too; this path silently dropped it, which is how post 191 published without one
 					postRec.title = currentTitle;
 					currentTitle = undefined;
@@ -876,7 +1023,10 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 						alertDialog (err.message);
 						}
 					else if (data !== undefined && data.guid !== undefined) {
-						addMyPostToTimeline (data, undefined, htmlText, parentId); //6/18/26 by Claude -- show the reply now, no socket round-trip
+						const publishedEnclosure = pendingAudioAttachment;
+						pendingAudioAttachment = undefined;
+						divAudioChip.hide ();
+						addMyPostToTimeline (data, undefined, htmlText, parentId, publishedEnclosure); //6/18/26 by Claude -- show the reply now, no socket round-trip
 						speakerBeep ();
 						closeReplyModal (true); //6/25/26 by CC -- #87: publishing discards the draft
 						goHomeWithNewPost (); //7/4/26 by CC -- #136: land the writer on the timeline where the reply just appeared
@@ -1413,6 +1563,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					divTweetBody.append (divTweetTitle);
 					}
 				divTweetBody.append (divTweetText);
+				divTweetBody.append (getAudioPlayerElement (item));
 				divTweetBody.append (divMoreButton);
 				divTweetBody.append (divTweetActions);
 				divTweet.append (divAvatar);
@@ -1451,7 +1602,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					}
 				}
 
-			function addMyPostToTimeline (data, theTitle, htmlText, inReplyTo) { //6/18/26 by Claude -- show the user's own just-published post immediately, built from local identity; the socket copy that follows is deduped by guid in newItem
+			function addMyPostToTimeline (data, theTitle, htmlText, inReplyTo, enclosure) { //6/18/26 by Claude -- show the user's own just-published post immediately, built from local identity; the socket copy that follows is deduped by guid in newItem
 				if (data.guid !== undefined && itemsByGuid [data.guid] !== undefined) { //6/21/26 by CC -- the inline socket can show this post before the publish response returns (the response waits on the S3 feed write); don't add a second copy
 					return;
 					}
@@ -1468,9 +1619,11 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					imageUrl: appPrefs.myAvatarImageUrl,
 					feedLink: appPrefs.myFeedLink,
 					feedDescription: appPrefs.myFeedDescription,
-					inReplyTo: inReplyTo
-					};
-				addItemToTimeline (chatItem);
+					inReplyTo: inReplyTo,
+					enclosureUrl: enclosure && enclosure.url,
+					enclosureType: enclosure && enclosure.type,
+					enclosureLength: enclosure && enclosure.size
+					};				addItemToTimeline (chatItem);
 				bumpParentReplyCount (chatItem); //7/3/26 by CC -- our own reply is newer than the parent's server count
 				}
 
@@ -1508,6 +1661,11 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					}
 				clearDraft ();
 				const postRec = {description: htmlText, markdowntext: markdownText};
+				if (pendingAudioAttachment !== undefined) {
+					postRec.enclosureUrl = pendingAudioAttachment.url;
+					postRec.enclosureType = pendingAudioAttachment.type;
+					postRec.enclosureLength = pendingAudioAttachment.size;
+					}
 				if (currentTitle !== undefined) {
 					postRec.title = currentTitle;
 					currentTitle = undefined;
@@ -1535,7 +1693,10 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 						alertDialog (err.message);
 						}
 					else if (data !== undefined && data.guid !== undefined) {
-						addMyPostToTimeline (data, postRec.title, htmlText, undefined); //6/18/26 by Claude -- show the post now, no socket round-trip
+						const publishedEnclosure = pendingAudioAttachment;
+						pendingAudioAttachment = undefined;
+						divAudioChip.hide ();
+						addMyPostToTimeline (data, postRec.title, htmlText, undefined, publishedEnclosure); //6/18/26 by Claude -- show the post now, no socket round-trip
 						speakerBeep ();
 						closeReplyModal (true); //6/25/26 by CC -- #87: publishing discards the draft
 						goHomeWithNewPost (); //7/4/26 by CC -- #136: land the writer on the timeline where the post just appeared
@@ -1873,6 +2034,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 			divModalToolbar.append (buttonModalBulletList);
 			divModalToolbar.append (buttonModalNumberList);
 			divModalToolbar.append (buttonModalMarkdown);
+			divModalToolbar.append (buttonModalRecord);
 			divModalToolbar.append (divContextMenu);
 
 			divComposerBody.append (divComposerToolbar);
@@ -1961,6 +2123,12 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 			divReplyComposerRow.append (inputReplyComposer);
 			divReplyComposerRow.append (textareaMarkdown); //7/5/26 by CC -- #107: the markdown text box sits in the same spot; setEditorMode shows one surface at a time
 			textareaMarkdown.hide ();
+			divAudioChip.find ("button").on ("click", clearPendingAudio);
+			divAudioChip.hide ();
+			divAudioDialog.append (divAudioTimer).append (divAudioTranscript).append ($('<div class="divAudioButtons"></div>').append (buttonAudioCancel).append (buttonAudioStop));
+			divAudioOverlay.append (divAudioDialog);
+			$(document.body).append (divAudioOverlay);
+			divAudioOverlay.hide ();
 			const divModalStatusGroup = $('<div class="divModalStatusGroup"></div>');
 			divModalStatusGroup.append (divModalStatus);
 			divModalStatusGroup.append (divModalWhen);
@@ -1977,6 +2145,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 			divReplyModal.append (divReplyModalTop);
 			divReplyModal.append ($('<div class="divReplyDividerLine"></div>'));
 			divReplyModal.append (divReplyComposerRow);
+			divReplyModal.append (divAudioChip);
 			divReplyModal.append (divModalBottom);
 			divReplyOverlay.append (divReplyModal);
 			$(document.body).append (divReplyOverlay);
@@ -2167,6 +2336,9 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 				event.preventDefault ();
 				toggleMarkdownMode ();
 				});
+			buttonModalRecord.on ("click", startAudioRecording);
+			buttonAudioCancel.on ("click", function () { flRecorderCanceled = true; if (theRecorder !== undefined) finishRecording (); else divAudioOverlay.hide (); });
+			buttonAudioStop.on ("click", finishRecording);
 
 			divModalCharCount.on ("click", function () {
 				appPrefs.flWordCount = !appPrefs.flWordCount;
@@ -2338,7 +2510,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					markdownText = mdSourceText; //7/5/26 by CC -- #107: kept current by the wizzy input handler
 					}
 				const text = getEditorText ().trim ();
-				if (text.length === 0) {
+				if (text.length === 0 && pendingAudioAttachment === undefined) {
 					return;
 					}
 				if (editTargetItem !== undefined) {
@@ -2603,7 +2775,7 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 					refreshUpdateDisabled ();
 					}
 				else {
-					buttonReplyPost.prop ("disabled", flEmpty || (ctPendingImageUploads > 0)); //7/22/26 by CC -- #188: no publishing while an image is still uploading
+					refreshComposerPublishButton (); //7/22/26 by CC -- no publishing while an image is still uploading
 					}
 				scheduleDraftSave ();
 				updateModalCharCount ();
@@ -2692,6 +2864,9 @@ function chatUserInterface (userOptions) { //5/2/26 by Claude + DW -- classic th
 
 				const divTweetText = entry.divThread.find (".divTweetText").first ();
 				divTweetText.html (chatItem.description);
+				entry.divThread.find (".divAudioPlayer").remove ();
+				const updatedAudio = getAudioPlayerElement (chatItem);
+				if (updatedAudio.length > 0) divTweetText.after (updatedAudio);
 				entry.refreshAfterUpdate (); //7/5/26 by CC -- #153: was expandFully; keep the reader's collapsed state so the icons don't jump when a like or edit updates the post
 				const divTweetTitle = entry.divThread.find (".divTweetTitle").first ();
 				const flHasTitle = (chatItem.title !== undefined && chatItem.title.length > 0);

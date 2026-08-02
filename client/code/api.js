@@ -284,6 +284,14 @@ function rssNetworkServer (userOptions) {
 			callback ({message});
 			}
 		}
+	function deleteMedia (id, callback) { //8/2/26 by CC -- audio attachments
+		if (userIsSignedIn ()) {
+			servercall ("deletemedia", {id}, true, "POST", callback);
+			}
+		else {
+			callback ({message: "Can't delete the media item because you are not signed in."});
+			}
+		}
 	function readHttpFile (url, callback) { //7/30/26 by DW
 		servercall ("readhttpfile", {url}, false, "GET", function (err, jstruct) {
 			if (err) {
@@ -348,6 +356,7 @@ function rssNetworkServer (userOptions) {
 	this.getMostActiveToday = getMostActiveToday; //7/1/26 by DW
 	this.getSocketGreeting = getSocketGreeting; //7/17/26 by CC
 		this.uploadMedia = uploadMedia; //7/22/26 by CC -- #188
+	this.deleteMedia = deleteMedia; //8/2/26 by CC -- audio attachments
 	
 	this.readHttpFile = readHttpFile; //7/30/26 by DW
 	

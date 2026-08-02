@@ -2129,6 +2129,83 @@ var config = {
 				});
 			}
 		}
+	function deleteMedia (email, code, id, callback) { //8/2/26 by CC -- audio attachments: a recorded clip is uploaded before the post is published; cancel/remove must be able to retract it
+		if (isEmailBlocked (email)) {
+			const message = "Can't delete the media item because the user is not authorized.";
+			callback ({message});
+			}
+		else {
+			getUserInfoByEmail (email, function (err, userRec) {
+				if (err) {
+					callback (err);
+					}
+				else {
+					if (userRec === undefined) {
+						const message = "Can't delete the media item because there is no user with email \"" + email + "\".";
+						callback ({message});
+						}
+					else {
+						if (userRec.emailSecret !== code) {
+							const message = "Can't delete the media item because the authorization code is not correct.";
+							callback ({message});
+							}
+						else {
+							getMediaById (id, function (err, mediaRec) {
+								if (err) {
+									callback (err);
+									}
+								else {
+									if (mediaRec.screenname !== userRec.screenname) {
+										const message = "Can't delete the media item because it was uploaded by a different user.";
+										callback ({message});
+										}
+									else {
+										const sqltext = "delete from media where id = " + davesql.encode (mediaRec.id) + ";";
+										davesql.runSqltext (sqltext, function (err) {
+											callback (err, undefined);
+											});
+										}
+									}
+								});
+							}
+						}
+					}
+				});
+			}
+		}
+	function sweepOrphanedMedia (callback) { //8/2/26 by CC -- nightly GC: media uploaded but never referenced by a post (canceled posts, pasted images that were discarded) lingers in the database; delete it once it's a day old and no live item points at it
+		const cutoff = new Date (new Date ().getTime () - (24 * 60 * 60 * 1000)); //24 hours -- long enough to cover the compose-to-publish window
+		const cutoffString = cutoff.toISOString ().replace ("T", " ").substring (0, 19); //sqlite's current_timestamp format -- "YYYY-MM-DD HH:MM:SS"
+		const sqltext = "select id from media where whenCreated < " + davesql.encode (cutoffString) + ";";
+		davesql.runSqltext (sqltext, function (err, rows) {
+			if (err) {
+				console.log ("sweepOrphanedMedia: err.message == " + err.message);
+				callback (err);
+				}
+			else {
+				rows.forEach (function (mediaRec) { //delete each candidate once nothing live references it -- enclosureUrl on items, or the URL embedded in a description (pasted images)
+					const url = config.urlServerForClient + "media/" + mediaRec.id;
+					const checkSqltext = "select count(*) as ct from items where (flDeleted is null or flDeleted = 0) and (enclosureUrl = " + davesql.encode (url) + " or description like " + davesql.encode ("%" + url + "%") + ");";
+					davesql.runSqltext (checkSqltext, function (err2, checkResult) {
+						if (err2) {
+							console.log ("sweepOrphanedMedia: check err.message == " + err2.message);
+							}
+						else {
+							if (checkResult [0].ct === 0) {
+								const deleteSqltext = "delete from media where id = " + davesql.encode (mediaRec.id) + ";";
+								davesql.runSqltext (deleteSqltext, function (err3) {
+									if (err3) {
+										console.log ("sweepOrphanedMedia: delete err.message == " + err3.message);
+										}
+									});
+								}
+							}
+						});
+					});
+				callback (undefined);
+			}
+		});
+	}
 	function publishFeedFile (relpath, xmltext, callback) { //the one place that decides database vs s3
 		if (config.flFeedsInDatabase) {
 			writeDatabaseFile ("/users/" + relpath, "text/xml", xmltext, callback);
@@ -2421,6 +2498,9 @@ function handleHttpRequest (theRequest) {
 		case "/uploadmedia": //7/22/26 by CC -- #188
 			uploadMedia (params.emailaddress, params.emailcode, params.type, theRequest.postBody, httpReturn);
 			return (true);
+		case "/deletemedia": //8/2/26 by CC -- audio attachments
+			deleteMedia (params.emailaddress, params.emailcode, params.id, httpReturn);
+			return (true);
 		case "/localnewuser": //7/29/26 by CC -- #205
 			if (requestIsFromThisMachine (theRequest)) {
 				localNewUser (params.screenname, params.email, function (err, url) {
@@ -2481,6 +2561,7 @@ function startup () {
 		if (config.flNightlyBackup) {
 			backupDatabase ();
 			}
+		sweepOrphanedMedia (function () {});
 		}
 	function everySecond () {
 		const now = new Date ();

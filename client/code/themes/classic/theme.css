@@ -1390,3 +1390,12 @@
 					width: auto;
 					}
 				}
+
+			.divAudioOverlay { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
+			.divAudioDialog { width: min(420px, calc(100vw - 32px)); padding: 24px; background: white; border-radius: 8px; text-align: center; }
+			.divAudioTimer { font: 24px monospace; margin-bottom: 16px; }
+			.divAudioTranscript { min-height: 80px; max-height: 180px; overflow: auto; color: #657786; margin-bottom: 16px; }
+			.divAudioButtons { display: flex; justify-content: center; gap: 8px; }
+			.divAudioChip { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0; padding: 6px 10px; border-radius: 14px; background: #eff3f4; }
+			.divAudioChip button { border: 0; background: none; font-size: 18px; cursor: pointer; }
+			.divAudioPlayer { display: block; max-width: 100%; margin: 8px 0; }
